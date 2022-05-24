@@ -1,0 +1,754 @@
+\documentclass{article}
+\usepackage[legalpaper, margin=1in]{geometry}
+\usepackage{datetime}
+\usepackage{hyperref}
+\usepackage{graphicx}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    }
+\usepackage[utf8]{inputenc}
+
+\title{Electrophysiology Analysis}
+\author{David Lukacsovich}
+
+\begin{document}
+
+\maketitle
+
+This is a document describing how to take .abf (or .atf) files produced during Current Clamp or Voltage Clamp analysis, and calculate electrophysiological properties from them.
+
+\section{Manage Raw Data}
+
+\subsection{ABF vs ATF files}
+
+Our current electrophysiology setup produces .abf files during the analysis process. This datafile contains all of the necessary metadata and raw data to perform all analysis of interest. However, it is time consuming to read in .abf files, get out the necessary metadata, and convert them into the necessary format. As such, the analysis code uses .atf files, which are raw text files with data matrices, that are easy to read in and analyze. The metadata are written to, and stored in other files for easy access.
+
+There are two ways to convert the .abf files to .atf files, and get the necessary metadata
+\begin{enumerate}
+    \item On the computer where the electrophysiology experiment is run, the same program is able to perform the conversion. You can run this, and note down the necessary values
+    
+    - This documentation currently does not cover how to do this
+    
+    - If you do this, follow \ref{Upload ATF}
+    
+    \item Use the existing code to convert the files. This is explained below as \ref{Convert to ATF} in \ref{Upload ABF}
+    
+\end{enumerate}
+
+\subsection{Key Parameters} \label{key parameters}
+
+The data is organized, and read in on the basis of three key parameters. All cells must have these parameters:
+\begin{enumerate}
+    \item \textbf{CellName} - this is the name of the cell, by which it will be identified. This is usually the name that it uses for the sequenced data analysis as well. This name should be \textbf{unique} across all projects.
+    
+    - When naming cells, you should start with a brief string (ex: \verb|WLC|) that is unique to you, and preferably unique to the project that you are working on.
+    
+    \item \textbf{CellType} - this is the cell type category to which the cell belongs. This is the parameter that will be supplied to determine for which cells to run the quantification analysis.
+    
+    - If you might want to not quantify some cells in a cell type, consider giving them different cell types
+    
+    - ex: the \verb|DG| type can be broken into \verb|DG_Male| and \verb|DG_Female|, so that you can create a compilation file that only contains the values for DG cells from Female mice
+    
+    \item \textbf{Project} - this is the name of the project under which the results will be grouped.
+    
+    - Data from multiple projects can be analyzed together
+    
+    - This project can have a nested structure. For example, you can sort your projects by having project names \verb|USER/Category1|, \verb|USER/Category2|, etc., if you want to minimize the risk of overlapping project names.
+\end{enumerate}
+
+\subsection{Upload ATF Data} \label{Upload ATF}
+
+\subsubsection{Check ATF Format}
+
+While .atf files are just text files, there are some variations to their formatting. The code requires one specific type of formatting, and so it is important to produce .atf files that match that formatting.
+
+\begin{itemize}
+    \item It should be a tab-separated matrix file
+    
+    \item There should be exactly 2 lines of text before the header of the file that are skipped when reading it in
+    
+    \item The third line should be the header, a list of column names
+    
+    \item The data should start with the fourth line
+    
+    \item The first column should be the time in milliseconds (ms)
+    
+    \item If the data is voltage clamp, there should be exactly 2 columns; the left for time, and the right for the average signal of each run
+    
+    \item If the data is current clamp, there should be one column of data for each time step
+    
+    \item Make sure that the file names start with the \textbf{CellName} (\ref{key parameters}) for each .atf file.
+    
+    \item Make sure that there are the same number of data points in each row of data
+    
+    - Sometimes erroneous .atf files are created, where the results for the current clamp and voltage clamp measurements are merged. These will throw an error when trying to read in the data
+\end{itemize}
+
+\subsubsection{Get Necessary Metadata} \label{Necessary Metadata}
+
+Unlike .abf files, .atf files do not contain any metadata necessary for accurate analysis of the results. As such, you will need to provide extra information beyond the key parameters (\ref{key parameters})
+
+\begin{itemize}
+    \item \textbf{Endings} - the ending string of each .atf file after the \textbf{CellName}
+    
+    - If, for cell \verb|SNK027| you have the .atf file \verb|SNK027_CC.atf|, the ending is \verb|_CC.atf|
+    
+    \item \textbf{Start Injection} - Only for current clamp data, this is the current injection, in picoamperes (pA), for the first step
+    
+    - Providing the wrong value for this will produce incorrect measurements for electrophysiological properties
+    
+    \item \textbf{Injection Step} - Only for current clamp data, this is the difference in current injection, in picoamperes (pA), for each step
+    
+    - Providing the wrong value for this will produce incorrect measurements for electrophysiological properties
+    
+    \item \textbf{Start Time} - is the time (in ms) when the signal injection starts
+    
+    - Providing the wrong value for this will produce incorrect measurements for electrophysiological properties
+    
+    \item \textbf{End Time} - is the time (in ms) when the signal injection ends
+    
+    - Providing the wrong value for this will produce incorrect measurements for electrophysiological properties
+    
+    \item \textbf{Signal Size} - Only for voltage clamp data, this is the voltage injection, in millivolts (mV), for triggering the current response
+    
+    - Providing the wrong value for this will produce incorrect measurements for electrophysiological properties
+\end{itemize}
+
+\subsubsection{Upload the Data}
+
+To upload the raw .atf files, you have 3 options
+
+\begin{itemize}
+    \item Upload the cells to \verb|EphysData|
+    \begin{enumerate}
+        \item Go to the correct upload folder in \verb|EphysData|
+        
+         - current clamp data should go to \verb|EphysData/Cclamp|
+         
+        - voltage clamp data should go to \verb|EphysData/Vclamp|
+        
+        - For other types of data, you may have to create the appropriate folder
+        
+        \item Go to the directory matching your \textbf{Project} (\ref{key parameters})
+        
+        - If the directory doesn't exist, create it
+        
+        \item Upload your files
+        
+        - Uploading many large files at the same time can cause problems and mix ups, so you should upload the files one at a time
+        
+        \item Run the code \verb|00\_1 Move Files.ipynb|
+        
+        - Open the notebook, and run the entire notebook, without the need to specify any parameters
+        
+        - This will move the files to the final location
+    \end{enumerate}
+    
+    \item Manually upload the files
+    
+    \begin{enumerate}
+        \item Make sure that you can physically access the jupyter server computer
+        
+        - It is in 55J24a
+        
+        \item Place the .atf files on some external storage device
+        
+        - USB or external harddrive
+        
+        \item The .atf files should be separated by category (current clamp, voltage clamp, etc.) into separate folders
+        
+        \item Within those folders, files should also be sorted in sub-directories matching your \textbf{Project} (\ref{key parameters})
+        
+        \item Connect the storage device to the jupyter server computer
+        
+        \item Go to \verb|Other Locations -> Storage_Analysis -> Electrophysiology| and make sure that the appropriate directories and sub-directories exist
+        
+        - if they don't, create them
+        
+        \item Copy your files to the computer, while preserving the sub-directory structures
+    \end{enumerate}
+    
+    \item Upload the files via the command terminal
+    
+    \begin{enumerate}
+        \item Make sure that the .atf files are on a computer that can access the HIFO servers
+        
+        \item The .atf files should be separated by category (current clamp, voltage clamp, etc.) into separate folders
+        
+        - current clamp files should be in a directory titled \verb|Cclamp| and voltage clamp files should be in a directory titled \verb|Vclamp|
+        
+        \item Within those folders, files should also be sorted in sub-directories matching your \textbf{Project} (\ref{key parameters})
+        
+        \item Open the command terminal
+        
+        \item change directory to where the main folders (\verb|Cclamp|, \verb|Vclamp|, etc.) are stored
+        
+        - \verb|cd PATH_TO_DIR|
+        
+        \item Transfer the files
+        
+        \begin{verbatim}
+            rsync -a ./ \
+            [Storage Directory]\
+            /Electrophysiology/
+        \end{verbatim}
+        
+        - This will copy the files to the target directory
+    \end{enumerate}
+    
+\end{itemize}
+
+\subsubsection{Update Metadata Files}
+
+There are five metadata files that code will reference, and which will need to be updated manually. Since there is minimal overlap in the information between these four files, there is no code to automatically fill them in.
+\begin{itemize}
+    \item \verb|References/Metadata/ABF\_Matches.tsv| contains information on which abf files correspond to which cell
+    \begin{itemize}
+        \item \textbf{Cell} is the \textbf{CellName} \ref{key parameters}
+        
+        \item \textbf{Project} is the \textbf{Project} \ref{key parameters}
+        
+        \item \textbf{CCName} is the name of the Current Clamp .abf file (without the .abf extension) for the cell. If there is no such file, this should be left blank
+        
+        \item \textbf{VCName} is the name of the Voltage Clamp .abf file (without the .abf extension) for the cell. If there is no such file, this should be left blank
+        
+        \item \textbf{ACName} is the name of any extraneous .abf file (without the .abf extension) for the cell.  If there is no such file, this should be left blank
+        
+        \item \textbf{CCChannel} is the name of the channel in the Current Clamp .abf file in which the cell's signals are recorded. If there is no such file, this should be left blank.
+        
+        \item \textbf{VCChannel} is the name of the channel in the Voltage Clamp .abf file in which the cell's signals are recorded. If there is no such file, this should be left blank.
+        
+        \item \textbf{ACChannel} is the name of the channel in any extraneous .abf file in which the cell's signals are recorded. If there is no such file, this should be left blank.
+    \end{itemize}
+    
+    - When filling out these names, make sure that they are separated by a space. Put a space separation, even between two blank (non-existent) values
+    
+    - This metadata file is not necessary to calculate electrophysiological properties, and is more useful as a method of keeping track of information for consistency. If, for any reason, you do not have .abf files, you can leave this file alone without causing problems with the code
+    
+    \item \verb|References/Metadata/Recording\_Values.tsv| contains any measured electrophysiological values that you wish to overwrite those calculated by the program.
+    \begin{itemize}
+        \item \textbf{Cell} is the \textbf{CellName} \ref{key parameters}
+        
+        \item \textbf{Project} is the \textbf{Project} \ref{key parameters}
+        
+        \item All others should be a column name produced during the calculations
+    \end{itemize}
+    
+    - When filling out these names, make sure that they are separated by a space. Put a space separation, even between two blank (non-existent) values
+    
+    - If you add in a new column, put the appropriate tab-separations between the columns for all existing rows, not just the new ones
+    
+    \item \verb|References/Metadata/Recording\_Configuration\_CC.tsv| contains the current injection information at each step that are necessary to interpret current clamp data
+    \begin{itemize}
+        \item \textbf{Cell} is the \textbf{CellName} \ref{key parameters}
+        
+        \item \textbf{Project} is the \textbf{Project} \ref{key parameters}
+        
+        \item \textbf{Start (pA)} is, in picoamperes, the current injection in the first sweep of a current clamp recording from \ref{Necessary Metadata}
+        
+        \item \textbf{Step (pA)} is, in picoamperes, the current injection difference between successive sweeps in a current clamp recording from \ref{Necessary Metadata}
+        
+        \item \textbf{Start CC (ms)} is, in milliseconds, the start time of the current clamp injection from \ref{Necessary Metadata}
+        
+        \item \textbf{End CC (ms)} is, in milliseconds, the end time of the current clamp injection from \ref{Necessary Metadata}
+    \end{itemize}
+    
+    - When filling out these names, make sure that they are separated by a space. Put a space separation, even between two blank (non-existent) values
+    
+    \item \verb|References/Metadata/Recording\_Configuration\_VC.tsv| contains the voltage adjustment information that are necessary to interpret voltage clamp data
+    \begin{itemize}
+        \item \textbf{Cell} is the \textbf{CellName} \ref{key parameters}
+        
+        \item \textbf{Project} is the \textbf{Project} \ref{key parameters}
+        
+        \item \textbf{Start VC (ms)} is, in milliseconds, the start time of the voltage adjustment from \ref{Necessary Metadata}
+        
+        \item \textbf{End VC (ms)} is, in milliseconds, the end time of the voltage adjustment from \ref{Necessary Metadata}
+        
+        \item \textbf{Signal (mV)} is, in millivolts, the strength of the voltage adjustment from \ref{Necessary Metadata}
+    \end{itemize}
+    
+    \item \verb|References/Metadata/Cell\_Parameters.tsv| contains identifying information for a cell. This information is used to identify which cells should be used for an analysis.
+    \begin{itemize}
+        \item \textbf{Cell} is the \textbf{CellName} \ref{key parameters}
+        
+        \item \textbf{Project} is the \textbf{Project} \ref{key parameters}
+        
+        \item \textbf{CellType} is the \textbf{CellType} \ref{key parameters}
+        
+        \item \textbf{CC\_ending} is the ending of the current clamp file \ref{Necessary Metadata}. When converting ABF files to ATF files, we generally use \verb|_CC.atf|
+        
+        \item \textbf{VC\_ending} is the ending of the voltage clamp file \ref{Necessary Metadata}. When converting ABF files to ATF files, we generally use \verb|_VC.atf|
+        
+        \item \textbf{AC\_ending} is the ending of a miscallaneous .atf file file \ref{Necessary Metadata}. When converting ABF files to ATF files, we generally use \verb|_AC.atf|
+    \end{itemize}
+    
+    - When filling out these names, make sure that they are separated by a space. Put a space separation, even between two blank (non-existent) values
+\end{itemize}
+
+\textbf{Why specify Project?}
+
+As might have been noticed, the \textbf{Project} parameter is repeated across these metadata files. This is because, while it is highly preferable that all \textbf{CellName} parameters be unique across all projects, this is not the case. By mandating specifying the \textbf{Project} variable, we give cells a second identifier, so that repeating the same \textbf{CellName} across multiple projects - while a horrible practice that should not be done - will not automatically cause problems.
+
+During the analysis process, once
+
+\subsection{Upload ABF Data} \label{Upload ABF}
+
+\subsubsection{Upload the Data}
+
+To upload the raw .abf files, you have 3 options
+\begin{itemize}
+    \item Upload the cells to \verb|EphysData/ABF|
+    
+    \begin{enumerate}
+        \item Uploading many large files at the same time can cause problems and mix ups, so you should upload the files one at a time
+        
+        \item Run the code \verb|00\_1 Move Files.ipynb|
+        
+        - Open the notebook, and run the entire notebook, without the need to specify any parameters
+        
+        - This will move the files to the final location
+    \end{enumerate}
+    
+    \item Manually upload the files
+    
+    \begin{enumerate}
+        \item Make sure that you can physically access the jupyter server computer
+        
+        - It is in 55J24a
+        
+        \item Place the .abf files on some external storage device
+        
+        - USB or external hard drive
+        
+        \item Connect the storage device to the jupyter server computer
+        
+        \item Open files, and copy the files to:
+
+        - \verb|Other Locations -> Storage_Analysis -> Electrophysiology -> ABF|
+    \end{enumerate}
+    
+    \item Upload the files via the command terminal
+    
+    \begin{enumerate}
+        \item Make sure that the .abf files are on a computer that can access the HIFO servers
+        
+        \item Make sure that the .abf files are in a directory (folder), with no .abf files that you do not also want to upload
+        
+        \item Open the command terminal
+        
+        \item Change directory to where the .abf files are stored
+        
+        - \verb| cd PATH_To_DIR|
+        
+        \item Transfer the files
+        
+        \begin{verbatim}
+            rsync -a ./*.abf \
+            [Storage Directory] \
+            /Electrophysiology/ABF/
+        \end{verbatim}
+          
+        - This will copy the files to the target directory
+    \end{enumerate}
+\end{itemize}
+
+\subsubsection{Upload the Metadata Reference File} \label{Upload Metadata}
+
+\begin{enumerate}
+    \item Create a metadata reference file. It needs to be one of the following file types:
+    \begin{itemize}
+        \item An excel file (.xls or .xlsx) with only 1 sheet
+        
+        - Having multiple sheets won't cause an error, but they won't be read either
+        
+        \item A comma separated text file (.csv)
+        
+        - The data should be in a matrix format, with values in each row separated by a comma
+        
+        - Each row should have the exact same number of values
+        
+        \item a tab separated text file (.txt or .tsv)
+        
+        - The data should be in a matrix format, with values in each row separated by a tab
+        
+        - Each row should have the exact same number of values
+    \end{itemize}
+    \item Create and fill out the values for the following columns
+    \begin{itemize}
+        \item \textbf{CellName} - This is the name of the cell described in the column. This must be the first column
+        
+        - refer to \ref{key parameters} for more details
+        \item \textbf{CellType} - The cell type of the cell
+        
+        - refer to \ref{key parameters} for more details
+        \item \textbf{Project} - The name of the project folder under which the data should be stored
+        
+        - refer to \ref{key parameters} for more details
+        
+        \item \textbf{CCName} - The name of the .abf file that corresponds to the current clamp data. If there isn't such a file, leave this section blank. The file ending (.abf) should not be added
+        
+        \item \textbf{VCName} - The name of the .abf file that corresponds to the current voltage data. If there isn't such a file, leave this section blank. The file ending (.abf) should not be added
+        
+        \item (Optional) \textbf{ACName} - The name of the .abf file that corresponds to neither current clamp, nor voltage clamp data. This entirely column is optional, and doesn't exist for most datasets. If there isn't such a file, leave this section blank. The file ending (.abf) should not be added
+        
+        - Code to analyze these files doesn't exist; the name just means .abf files beyond the types which we have decided how to analyze. However, at least it will convert it to .atf files, which can be plotted, visualized, and for which analysis methods can later be developed
+        
+        \item \textbf{CCChannel} - The name of the channel in the Current Clamp .abf file in which the cell’s signals are recorded. If there is no such file, this should be left blank
+        
+        \item \textbf{VCChannel} - The name of the channel in the Voltage Clamp .abf file in which the cell’s signals are recorded. If there is no such file, this should be left blank
+        
+        \item (Optional) \textbf{ACChannel} - The name of the channel in any extraneous .abf file in which the cell’s signals are recorded. This entirely column is optional, and doesn't exist for most datasets. If there is no such file, this should be left blank
+        
+        \item You can add other columns if you wish, but any columns that the code doesn't have a specific analysis method for will be ignored
+    \end{itemize}
+    \item Upload the file to \verb|References -$>$ ConversionFiles|
+\end{enumerate}
+
+\subsubsection{Assess ABF Files}
+
+Often times, there are problems with our .abf files. The major causes for such errors are:
+\begin{itemize}
+    \item Mixing up current clamp and voltage clamp files
+    
+    \item Specifying the incorrect channels
+    
+    \item Having improperly formatted .abf files, where not all sweeps have the same number of data points
+\end{itemize}
+
+In all of these cases, looking directly at the traces before running the time consuming conversion can let us catch errors early. Even if the researcher forgot to record the channel used, so long as only 1 cell was measured in the file, then looking at the individual sweeps can allow them to retrieve that information. Therefore, it is most efficient to run a quick assessment on the .abf files, and make an adjustment to the reference file now, then to try to do some after the more time consuming file conversion code.
+
+As a note, this assessment code also saves the headers of the .abf files to text files. If there is a desire to add extra functionality to the code, or to retrieve more meta information - to allow more flexibility in project design - it becomes necessary to look at these files. Therefore, it is good practice to run this code, even if you don't feel the need to look at the sweeps.
+
+\begin{itemize}
+    \item Open the jupyter notebook \verb|00\_2 Assess ABF Files.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the second cell and specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{reference\_file} - This is the name of the metadata reference file that you uploaded \ref{Upload Metadata}
+    \end{itemize}
+    
+    \item Run the notebook
+    
+    - This will create the file headers
+    
+    \item Go to the third cell and specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{dataset} - is the name that you wish to use to group the results of this experiment
+        
+        \item \textbf{reference\_file} - This is the name of the metadata reference file that you uploaded \ref{Upload Metadata}
+    \end{itemize}
+    
+    \item Run the notebook
+    
+    \item Voltage Clamp sweeps will be at \verb|Plots/DATASET/ABF\_VC|, where \verb|DATASET| is equivalent to the  \textbf{dataset} that you specified
+    
+    \item Current Clamp sweeps will be at \verb|Plots/DATASET/ABF\_CC|, where \verb|DATASET| is equivalent to the \textbf{dataset} that you specified
+\end{itemize}
+
+\subsubsection{Convert to ATF Data} \label{Convert to ATF}
+
+\begin{enumerate}
+    \item Open the jupyter notebook \verb|00\_3 Convert ABF to ATF.ipynb|
+    
+    - This code converts the ABF files to ATF files
+    
+    - It also automatically updates the necessary metadata files
+    
+    \item specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{reference\_file} - This is the name of the metadata reference file that you uploaded \ref{Upload Metadata}
+    \end{itemize}
+    
+    \item Run the notebook
+    
+    - This can take a long time, on the order of hours.
+    
+    - The code will, before it starts the conversion, print out a list of cells which might be missing any values. Read these messages carefully
+    
+    - Once the code has finished running, it will print out a list of cells for which some error happened during the conversion process. These cells won't have .atf files
+\end{enumerate}
+
+\section{Evaluate Cells}
+
+Even after files have been successfully uploaded, there might still be problems. Before performing any calculations, it is important to give a quick glance over the data to make sure that there isn't any anomalous behavior.
+
+\subsection{Evaluate ATF Files}
+
+This code evaluates whether the .atf files can be read in by the code. If not, it checks for some common problems. Common causes that lead to this error are:
+\begin{itemize}
+    \item Merging current clamp and voltage clamp results into one file
+    
+    - Should return a \verb|Inconsistent Line Sizes| message
+    
+    \item The file having the wrong number of header lines when manually converting to the .atf format
+    
+    - Should return a \verb|Inconsistent Line Sizes| message
+    
+    \item Part of the file being deleted
+    
+    - Should return a \verb|Missing| message
+    
+    \item The data being missing
+    
+    - Should return a \verb|No Time Points| or \verb|No Traces| message
+    
+    \item The file being encoded in a format that python can't read natively
+    
+    - Should return a \verb|Pandas Can't Open| or \verb|Can't Open| message
+\end{itemize}
+
+To perform the check:
+\begin{enumerate}
+    \item Open \verb|00\_4 Assess Cells.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the second cell, and specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{projects} is a list of \textbf{Project}s (\ref{key parameters}) within which the data are stored. If this is an empty list, it will look for cells in all \textbf{Project}s
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}) for the cells of interest.
+    \end{itemize}
+    
+    \item Run the cell. It will either not find any problems, or print out a message of how many cells had problems, and a data matrix of those problems
+    
+    - Empty spaces indicate that the .atf file was not expected to exist
+    
+    - \verb|Normal| means that there were no problems in reading the file
+    
+    \item All other messages indicate that there is a problem with the file
+\end{enumerate}
+
+If there are any problems, go back, and manually check the .atf files to see what the issue is. As the code can't read them in, trying to analyze them will throw errors.
+
+\subsection{Evaluate Traces} \label{evaluate trace}
+
+There are a number of problems that can only be detected by visually looking at the electrophysiological voltage clamp traces and individual current clamp sweeps of cells
+
+\begin{itemize}
+    \item Voltage clamp and current clamp data may have been mixed up. In this case, the solution ranges from manually swapping the relevant .atf files if data were uploaded as .atf files, to redoing the .abf to .atf conversion with a fixed reference file
+    
+    \item Cells might have been highly noisy during the measurement. The code has a degree of in-built robustness to noise, but if the data is too noisy, it will fail
+    
+    \item If manually uploading .atf files, the Start and Step sizes might have been wrongly specified (or even forgotten). Therefore, it is important to check the current clamp plots, and make sure that there is no voltage step (either positive or negative) on the sweep with no current injection.
+    
+    \item The cells might have biological parameters outside of what the experimenter was expecting. As such, it is entirely possible that the start and step sizes for current clamp were too large (or too small) by several factors to get a proper measurement, or that multiple voltage clamp sweeps were done too close together
+    
+    - For this reason, it is important to run this code \textbf{when you only have a few cells} to see if you need to adjust your experiment setup.
+\end{itemize}
+
+This code plots out the traces, so that the experimenter can visually check them for problems
+
+\begin{enumerate}
+    \item Open \verb|00\_4 Assess Cells.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the third cell, and specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{dataset} is the name that you wish to use to group the results of this experiment.
+        
+        \item \textbf{projects} is a list of \textbf{Project}s (\ref{key parameters}) within which the data are stored. If this is an empty list, it will look for cells in all \textbf{Project}s
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}) for the cells of interest.
+    \end{itemize}
+    
+    \item Run the cell
+    
+    \item Voltage Clamp results will be at \verb|Plots/DATASET/Traces_VC.pdf|, where \verb|DATASET| is equivalent to the \textbf{dataset} that you specified.
+    
+    \item Current Clamp results will be in the directory \verb|Plots/DATASET/Traces_CC|, where \verb|DATASET| is equivalent to the \textbf{dataset} that you specified.
+    
+    - Values that the program thinks are peaks are marked with a red dot
+    
+    - Sweeps that are too noisy and were removed are plotted in red
+\end{enumerate}
+
+
+\subsection{Evaluate Sigmoid Fit}
+
+To calculation the maximum AP frequency, we make the assumption the the spiking-frequency vs current plot approximately follows a \href{https://en.wikipedia.org/wiki/Sigmoid\_function}{Sigmoid} function. This is not derived from biological first principles, but made out of sheer convenience. When this assumption is incorrect, the code's predictions using the sigmoid curve is suspect. There is a build-in control that it won't guess a maximum AP frequency over twice the measured highest AP frequency, purely out of necessity.
+
+This code produces the spiking-frequency vs current plots for each cell. It is recommended that these plots be visually evaluated to see how many approximately follow a sigmoid curve. This can be used to decide whether to keep maximum AP frequency as a relevant parameter.
+
+\subsubsection{Frequency Definitions} \label{Frequency Definition}
+
+For reasons, it was decided that we would measure 7 different frequencies. Some of these definitions are near identical, while others will produce drastically different results in most cells. For all of these, the instantaneous frequency at a spike is defined as 1 over the time interval to the following spike
+
+\begin{itemize}
+    \item \textbf{Average Full Frequency} Measures the number of action potential spikes over the current injection interval, divided by the time span of the current injection interval
+    \item \textbf{Average Custom Frequency} Measures the number of action potential spikes over a custom, researcher defined interval, divided by the time span of the custom interval
+    \item \textbf{Average Firing Frequency} Measures the number of action potential spikes, minus 1, divided by the interval from the first to the last spike
+    \item \textbf{Average Firing Instantaneous Frequency} Measures the mean of the instantaneous frequency for all spikes over the current injection interval
+    \item \textbf{Median Firing Instantaneous Frequency} Measures the median of the instantaneous frequency for all spikes over the current injection interval
+    \item \textbf{Average Custom Instantaneous Frequency} Measures the mean of the instantaneous frequency for all spikes over a custom, researcher defined interval
+    \item \textbf{Median Custom Instantaneous Frequency} Measures the median of the instantaneous frequency for all spikes over a custom, researcher defined interval
+\end{itemize}
+
+\subsubsection{Running the Code}
+
+\begin{enumerate}
+    \item Open \verb|00\_4 Assess Cells.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the fourth cell, and specify the necessary variables
+    
+    \begin{itemize}
+        \item \textbf{dataset} is the name that you wish to use to group the results of this experiment.
+        
+        \item \textbf{projects} is a list of \textbf{Project}s (\ref{key parameters}) within which the data are stored. If this is an empty list, it will look for cells in all \textbf{Project}s
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}) for the cells of interest.
+        
+        \item \textbf{custom\_start} is, in milliseconds, the start time of the custom interval over which the researcher wishes to evaluate the frequency \ref{Frequency Definition}
+        
+        \item \textbf{custom\_end} is, in milliseconds, the end time of the custom interval over which the researcher wishes to evaluate the frequency \ref{Frequency Definition}
+    \end{itemize}
+    
+    \item Run the cell
+    
+    \item Results will be stored in \verb|Plots/DATASET/Sigmoid|, where \verb|DATASET| is equivalent to the \textbf{dataset} that you specified, with one pdf for each frequency definition, and sharing its name
+\end{enumerate}
+
+\section{Perform Analysis}
+
+\subsection{Calculate Electrophysiological Values} \label{Calculate Ephys}
+
+\begin{itemize}
+    \item Open the jupyter notebook \verb|00\_5 Generate Electrophys Data.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the second cell and specify the necessary variables
+    \begin{itemize}
+        \item \textbf{dataset} is the name under which to save the results
+        
+        \item \textbf{projects} is a list of \textbf{Project}s (\ref{key parameters}) within which the data are stored. If this is an empty list, it will look for cells in all \textbf{Project}s
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}) for the cells of interest.
+        
+        \item \textbf{custom\_start} is, in milliseconds, the start time of the custom interval over which the researcher wishes to evaluate the frequency \ref{Frequency Definition}
+        
+        \item \textbf{custom\_end} is, in milliseconds, the end time of the custom interval over which the researcher wishes to evaluate the frequency \ref{Frequency Definition}
+    \end{itemize}
+    
+    \item Run the cell
+    
+    - This will take a long time (around an hour)
+    
+    - Electrophysiological values for each cell will be written to a table at \verb|Calculated/Compiled/DATASET.tsv| where \verb|DATASET| is equivalent to the \textbf{dataset} that you specified
+    
+    - Action potential spike times, and basic properties for each sweep - including those that are dropped due to analysis as noise - will be written to \verb|Calculated/Action_Potential/PROJECT/CELL.tsv| where \verb|PROJECT| is the project that a cell belongs to, and \verb|CELL| is the name of the cell.
+\end{itemize}
+
+\subsection{Plot Electrophsiological Values}
+
+This code makes plots of the data that you produced in \ref{Calculate Ephys}
+
+\begin{itemize}
+
+    \item Open the jupyter notebook \verb|00\_5 Generate Electrophys Data.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the third cell and specify the necessary variables
+    \begin{itemize}
+        \item \textbf{dataset} is the name under which to saved the results in \ref{Calculate Ephys}
+        
+        \item \textbf{plot\_inds} is a list of electrophysiological values that you wish to plot. If this is not specified, or left as an empty list, then all electrophysiological values will be plotted. This variable can also be used to reorder the electrophysiological properties, as they will be specified in the order here
+        
+        - You can refer to the \textbf{dataset} file at \verb|Calculated/Compiled| to see the available properties and their order. They are the column names
+        
+        - This can either be a list of column numbers, or column names. If column names, you need to use the exact spelling as used in the file.
+        
+        - If you use numerical indices, the count is 1 indexed, and starts after the \textbf{CellType} column. That is, 1 would correspond to the first column after \textbf{CellType} (\textbf{Input resistance (MOhm)} as of writing this documentation), 2 would correspond to the column immediately after it (\textbf{Series resistance (MOhm)} as of writing this documentation), etc.
+        
+        \item \textbf{plot\_ranges} is a dictionary specifying the ranges (lower and upper bounds) of the plots for each ephys property. You can specify a property with either its column number (1 indexed), or its name.
+        
+        - If you only want to specify 1 bound, set the other to \verb|None|. For example, \verb|2:(10,None)| will set the second property, Maximum AP Frequency to have a lower bound of 10 Hz, and an unspecified upper bound
+        
+        - If a bound is not specified for a variable, the program will, by default, use \verb|(None,None)|, and the python's plotting code will intuit the best range
+        
+        - The count is 1 indexed, and if you specified \textbf{plot\_inds}, then a number will correspond to the position of a value in \textbf{plot\_inds}. That is, 1 will be the first column that you specified, 2 will be the second column that you specified, etc.
+        
+        \item \textbf{name\_converter} is a dictionary that can be used to change the names of electrophysiological properties. The keys are the names as they are listed in the \textbf{dataset} file, and the values are what they will be plotted as
+        
+        - Values that aren't specified in \textbf{name\_converter} will keep their original names
+        
+        \item \textbf{color\_dict} is a dictionary of colors, specifying the color that each cell type should be plotted in.
+        
+        - Cell types that aren't provided a color (either due to typo, or because the dictionary was left empty) have a color randomly generated.
+        
+        - Colors should be either a \href{https://en.wikipedia.org/wiki/Web_colors#Hex\_triplet}{6 digit hex-triple}, a tuple tuple of 3 integers in the range of 0 to 255, a tuple of 3 floats in the range of 0. to 1., or a color innately known to python
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}), in the order that you want them plotted in. If this variable isn't supplied (or is an empty list), all cell types will be plotted in alphabetical order
+        
+        - This variable can be used to drop unwanted cell types - such as if you are producing multiple plots with only parts of the total data in each - or if you wish to reorder them
+        
+        \item \textbf{violin\_args} is a dictionary of key-word arguments that you can specify to the code if you want to alter the appearance of the violin plots. See the function \verb|plot_generated_electrophys| in \verb|plot\_ax\_violin.py| if you are interested in playing with this option.
+    \end{itemize}
+    
+    \item Run the cell
+    
+    - Results will be written to \verb|Plots/DATASET/Distributions.pdf|, where \verb|DATASET| is \textbf{dataset} that you specified.
+\end{itemize}
+
+\subsection{Plot Action Potential Steps}
+
+This code plots the action potential count vs current injection using data you produced in \ref{Calculate Ephys}
+
+\begin{itemize}
+
+    \item Open the jupyter notebook \verb|00\_5 Generate Electrophys Data.ipynb|
+    
+    \item Run the first cell to load the modules
+    
+    \item Go to the fourth cell and specify the necessary variables
+    \begin{itemize}
+        \item \textbf{dataset} is the name under which to saved the results in \ref{Calculate Ephys}
+        
+        \item \textbf{savename} is the name that you wish to save the end pdf under
+        
+        \item \textbf{projects} is a list of \textbf{Project}s (\ref{key parameters}) within which the data are stored. If this is an empty list, it will look for cells in all \textbf{Project}s
+        
+        - You need to define \textbf{projects} despite having \textbf{dataset} defined because the project information wasn't saved in the dataset electrophysiological properties file during \ref{Calculate Ephys}. Not defining \textbf{projects} shouldn't cause an issue, so long as duplicates of your cell names don't exist.
+        
+        \item \textbf{celltypes} is a list of \textbf{CellType}s (\ref{key parameters}) for the cells of interest.
+        
+        - By defining this variable, it is possible to plot out only part of your evaluated data. This way, you can compare two cell types pair-wise, if you have more than two cell types, and perform multiple pair-wise comparison plots if you desire
+        
+        \item \textbf{color\_dict} is a dictionary of colors, specifying the color that each cell type should be plotted in.
+        
+        - Cell types that aren't provided a color (either due to typo, or because the dictionary was left empty) have a color randomly generated.
+        
+        - Colors should be either a \href{https://en.wikipedia.org/wiki/Web_colors#Hex\_triplet}{6 digit hex-triple}, a tuple tuple of 3 integers in the range of 0 to 255, a tuple of 3 floats in the range of 0. to 1., or a color innately known to python
+        
+        \item \textbf{thresholds} is a variable that can be used to trim cells. It is a dictionary of electrophysiological parameters as keys, with a tuple of lower and upper bounds as the values. For each parameter, it will remove all cells who don't have a measure within the given bounds
+        
+        - It is possible to specify only one of the two bounds, by setting the other to \verb|None|
+        
+        - If this variable is left empty, all cells will be used
+        
+        - Example format is \verb|thresholds = {'Resting membrane potential (mV)':(-90.,-70.)}|. This will only keep cells whose resting membrane potential is at least -90mV, and at most -70mV
+        
+        \item \textbf{min\_count} is the minimum number of measurements that a celltype must have at a given current injection level for it to be evaluated. This threshold can be useful in case not all cells were evaluated to the same level of current injection, so that the upper end of the plot doesn't end up extremely noisy
+    \end{itemize}
+    
+    \item Run the cell
+    
+    - Results will be written to \verb|Plots/DATASET/Distributions.pdf|, where \verb|DATASET| is \textbf{dataset} that you specified.
+\end{itemize}
+
+\end{document}
